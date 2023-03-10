@@ -69,15 +69,13 @@ async fn main() {
         return;
     }
     let arg = &args[1];
-    let mut start: u64 = arg
+    let start: u64 = arg
         .chars()
-        .filter(|c| c.is_digit(10))
+        .filter(|c| c.is_ascii_digit())
         .collect::<String>()
         .parse::<u64>()
         .unwrap_or(0);
-
-
-
+    //doig gen un erreur si pas digit
 
     let nb_player = get_nb_player().await.unwrap();
     info!("ther is {} player", nb_player);
@@ -85,7 +83,7 @@ async fn main() {
     info!("start paralele carving");
     let mut handles = Vec::new();
 
-    for player_offset in (1..nb_player).step_by(200) {
+    for player_offset in (start..nb_player).step_by(200) {
         let handle = tokio::spawn(async move {
             getpage(player_offset).await.unwrap(); //erreur propager mal
         });

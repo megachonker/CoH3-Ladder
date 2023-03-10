@@ -1,5 +1,5 @@
 [package]
-name = "Coh3LadderBoard"
+name = "coh3_ladder_board"
 version = "0.1.0"
 edition = "2021"
 
