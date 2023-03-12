@@ -4,7 +4,7 @@ use std::error::Error;
 use serde::{Serialize,Deserialize};
 use std::fs::File;
 use std::io::prelude::*;
-
+use bincode;
 
 #[macro_use]
 extern crate log;
@@ -14,17 +14,17 @@ struct Player {
     name: String,
     steam_link: String,
     country: [char; 2],
-    xp: u64,
+    xp: u16,
     wermart_2v2: RankGame, //to vec list for getting history
                            //ad new faction and mod here
 }
 #[derive(Serialize, Debug,Deserialize)]
 struct RankGame {
-    rank: u64,
-    elo: u64,
-    win: u64,
-    lose: u64,
-    streak: i64,
+    rank: u16,
+    elo: u16,
+    win: u16,
+    lose: u16,
+    streak: i8,
     lastmatchdate: u64,
 }
 
@@ -121,14 +121,14 @@ async fn getpage(rank_offset: u64) -> Result<Vec<Player>, Box<dyn Error>> {
                         .collect::<Vec<char>>()
                         .try_into()
                         .unwrap(),
-                    xp: j_player["xp"].as_u64().unwrap(),
+                    xp: j_player["xp"].as_u64().unwrap()as u16,
                     //init game
                     wermart_2v2: RankGame {
-                        rank: (j_game["rank"].as_u64().unwrap()),
-                        elo: (j_game["rating"].as_u64().unwrap()),
-                        win: (j_game["wins"].as_u64().unwrap()),
-                        lose: (j_game["losses"].as_u64().unwrap()),
-                        streak: (j_game["streak"].as_i64().unwrap()),
+                        rank: (j_game["rank"].as_u64().unwrap()as u16),
+                        elo: (j_game["rating"].as_u64().unwrap()as u16),
+                        win: (j_game["wins"].as_u64().unwrap() as u16),
+                        lose: (j_game["losses"].as_u64().unwrap()as u16),
+                        streak: (j_game["streak"].as_i64().unwrap()as i8),
                         lastmatchdate: (j_game["lastmatchdate"].as_u64().unwrap()),
                     },
                 });
@@ -180,14 +180,13 @@ async fn main() {
     all.sort_by_key(|player| player.wermart_2v2.rank);
 
 
-    
     let file = File::create("output.json").unwrap();
-    serde_json::to_writer(&file,&all).unwrap();
+    let binstr = bincode::serialize_into(file,&all).unwrap();
 
     let bid = File::open("output.json").unwrap();
-    let test:Vec<Player> = serde_json::from_reader(&bid).unwrap();
+    let decpde:Vec<Player> = bincode::deserialize_from(&bid).unwrap();
     
-    for player in test {
+    for player in decpde {
         player.display_summary();
     }
 
