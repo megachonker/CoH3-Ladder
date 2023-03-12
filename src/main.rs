@@ -1,9 +1,68 @@
 use serde_json::Value;
 use std::env;
 use std::error::Error;
+use serde::{Serialize,Deserialize};
+use std::fs::File;
 
 #[macro_use]
 extern crate log;
+
+#[derive(Serialize, Debug,Deserialize)]
+struct Player {
+    name: String,
+    steam_link: String,
+    country: [char; 2],
+    xp: u64,
+    wermart_2v2: RankGame, //to vec list for getting history
+                           //ad new faction and mod here
+}
+#[derive(Serialize, Debug,Deserialize)]
+struct RankGame {
+    rank: u64,
+    elo: u64,
+    win: u64,
+    lose: u64,
+    streak: i64,
+    lastmatchdate: u64,
+}
+
+impl Player {
+    fn display(&self) {
+        print!("-------------------------------------------");
+        println!("Name: {}", self.name);
+        println!("Steam Link: {}", self.steam_link);
+        println!("Country: {}", self.country.iter().collect::<String>());
+        println!("XP: {}", self.xp);
+        println!("2v2 Rank Game:");
+        self.wermart_2v2.display();
+    }
+
+    fn display_summary(&self) {
+        print!(
+            "{} ({}), ",
+            self.name,
+            self.country.iter().collect::<String>()
+        );
+        println!(
+            "2v2 Rank: {} Elo: {} Wins: {} Losses: {}",
+            self.wermart_2v2.rank,
+            self.wermart_2v2.elo,
+            self.wermart_2v2.win,
+            self.wermart_2v2.lose
+        );
+    }
+}
+
+impl RankGame {
+    fn display(&self) {
+        println!("Rank: {}", self.rank);
+        println!("Elo: {}", self.elo);
+        println!("Wins: {}", self.win);
+        println!("Losses: {}", self.lose);
+        println!("Streak: {}", self.streak);
+        println!("Last Match Date: {}", self.lastmatchdate);
+    }
+}
 
 async fn get_nb_player() -> Result<u64, Box<dyn Error>> {
     let json_str = reqwest::get("https://coh3-api.reliclink.com/community/leaderboard/getleaderboard2?count=1&leaderboard_id=2130306&start=1&sortBy=1&title=coh3")
@@ -17,8 +76,7 @@ async fn get_nb_player() -> Result<u64, Box<dyn Error>> {
     Ok(azer)
 }
 
-async fn getpage(rank_offset: u64) -> Result<bool, Box<dyn Error>> {
-    // https://coh3-api.reliclink.com/community/leaderboard/getleaderboard2?count=50&leaderboard_id=2130306&start=2551&sortBy=1&title=coh3
+async fn getpage(rank_offset: u64) -> Result<Vec<Player>, Box<dyn Error>> {
     let url = format!("https://coh3-api.reliclink.com/community/leaderboard/getleaderboard2?count=200&leaderboard_id=2130306&start={}&sortBy=1&title=coh3",rank_offset);
     let json_str = reqwest::get(url).await?.text().await?;
 
@@ -28,38 +86,60 @@ async fn getpage(rank_offset: u64) -> Result<bool, Box<dyn Error>> {
     //if get end of player
     if v["rankTotal"].as_u64() <= Some(rank_offset) {
         print!("===========================END=========================");
-        return Ok(false);
+        ///////////////////////
+        // STOP HERE PLEASE
+        ///////////////////////
     }
 
     //get number of player
-    let size = v["statGroups"].as_array().unwrap().len();
+    let num_players = v["statGroups"].as_array().unwrap().len();
+
+    //allocating the number of player
+    let mut player_list: Vec<Player> = Vec::with_capacity(num_players); // Preallocate vector
 
     //match Player ID with Game ID
-    for statgroups_indice in 0..size {
+    for statgroups_indice in 0..num_players {
         //bind variable
         let user_id = &v["statGroups"][statgroups_indice]["id"];
 
-        for laderboard_indice in 0..size {
+        for laderboard_indice in 0..num_players {
             let statgroup_id = &v["leaderboardStats"][laderboard_indice]["statgroup_id"];
 
-            if statgroup_id == user_id{
-                let player = &v["statGroups"][statgroups_indice]["members"][0];
-                let game = &v["leaderboardStats"][laderboard_indice];
-                print!(
-                    "ELO {}: {} from {} ",
-                    game["rating"], player["alias"], player["country"]
-                );
-                println!("Win/Loss {}/{}", game["wins"], game["losses"]);
+            if statgroup_id == user_id {
+                let j_player = &v["statGroups"][statgroups_indice]["members"][0];
+                let j_game = &v["leaderboardStats"][laderboard_indice];
+                //init player
+                player_list.push(Player {
+                    name: j_player["alias"].to_string(),
+                    steam_link: j_player["name"].to_string(),
+                    country: j_player["country"]
+                        .as_str()
+                        .unwrap()
+                        .chars()
+                        .collect::<Vec<char>>()
+                        .try_into()
+                        .unwrap(),
+                    xp: j_player["xp"].as_u64().unwrap(),
+                    //init game
+                    wermart_2v2: RankGame {
+                        rank: (j_game["rank"].as_u64().unwrap()),
+                        elo: (j_game["rating"].as_u64().unwrap()),
+                        win: (j_game["wins"].as_u64().unwrap()),
+                        lose: (j_game["losses"].as_u64().unwrap()),
+                        streak: (j_game["streak"].as_i64().unwrap()),
+                        lastmatchdate: (j_game["lastmatchdate"].as_u64().unwrap()),
+                    },
+                });
+                break;
             }
         }
     }
-    Ok(true)
+    Ok(player_list)
 }
 
 #[tokio::main]
 async fn main() {
     env_logger::init();
-
 
     //getting arg
     let args: Vec<String> = env::args().collect();
@@ -84,13 +164,29 @@ async fn main() {
 
     for player_offset in (start..nb_player).step_by(200) {
         let handle = tokio::spawn(async move {
-            getpage(player_offset).await.unwrap(); //erreur propager mal
+            getpage(player_offset).await.unwrap() //erreur propager mal
         });
         handles.push(handle);
     }
-    
+
+    let mut all:Vec<Player> = Vec::new();
     info!("wait for all tasks to complete");
     for handle in handles {
-        handle.await.unwrap();
+        all.extend(handle.await.unwrap());
     }
+
+    all.sort_by_key(|player| player.wermart_2v2.rank);
+
+
+    
+    let file = File::create("output.json").unwrap();
+    serde_json::to_writer(&file,&all).unwrap();
+
+    let bid = File::open("output.json").unwrap();
+    let test:Vec<Player> = serde_json::from_reader(&bid).unwrap();
+    
+    for player in test {
+        player.display_summary();
+    }
+
 }
