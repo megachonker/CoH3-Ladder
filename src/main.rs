@@ -1,7 +1,7 @@
 use serde_json::Value;
 use std::env;
 use std::error::Error;
-use serde::{Serialize};
+use serde::{Serialize,Deserialize};
 use std::fs::File;
 use std::io::prelude::*;
 
@@ -9,7 +9,7 @@ use std::io::prelude::*;
 #[macro_use]
 extern crate log;
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug,Deserialize)]
 struct Player {
     name: String,
     steam_link: String,
@@ -18,7 +18,7 @@ struct Player {
     wermart_2v2: RankGame, //to vec list for getting history
                            //ad new faction and mod here
 }
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug,Deserialize)]
 struct RankGame {
     rank: u64,
     elo: u64,
@@ -179,14 +179,16 @@ async fn main() {
 
     all.sort_by_key(|player| player.wermart_2v2.rank);
 
-    for player in &all {
-        player.display_summary();
-    }
+
     
     let file = File::create("output.json").unwrap();
-    serde_json::to_writer(file,&all).unwrap();
+    serde_json::to_writer(&file,&all).unwrap();
 
-    // let deserialized:Vec<Player> = serde_json::from_reader(file).unwrap();
-
+    let bid = File::open("output.json").unwrap();
+    let test:Vec<Player> = serde_json::from_reader(&bid).unwrap();
+    
+    for player in test {
+        player.display_summary();
+    }
 
 }
