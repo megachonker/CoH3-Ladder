@@ -1,10 +1,15 @@
 use serde_json::Value;
 use std::env;
 use std::error::Error;
+use serde::{Serialize};
+use std::fs::File;
+use std::io::prelude::*;
+
 
 #[macro_use]
 extern crate log;
 
+#[derive(Serialize, Debug)]
 struct Player {
     name: String,
     steam_link: String,
@@ -13,6 +18,7 @@ struct Player {
     wermart_2v2: RankGame, //to vec list for getting history
                            //ad new faction and mod here
 }
+#[derive(Serialize, Debug)]
 struct RankGame {
     rank: u64,
     elo: u64,
@@ -129,7 +135,6 @@ async fn getpage(rank_offset: u64) -> Result<Vec<Player>, Box<dyn Error>> {
                 break;
             }
         }
-        player_list.last().unwrap().display_summary();
     }
     Ok(player_list)
 }
@@ -161,13 +166,27 @@ async fn main() {
 
     for player_offset in (start..nb_player).step_by(200) {
         let handle = tokio::spawn(async move {
-            getpage(player_offset).await.unwrap(); //erreur propager mal
+            getpage(player_offset).await.unwrap() //erreur propager mal
         });
         handles.push(handle);
     }
 
+    let mut all:Vec<Player> = Vec::new();
     info!("wait for all tasks to complete");
     for handle in handles {
-        handle.await.unwrap();
+        all.extend(handle.await.unwrap());
     }
+
+    all.sort_by_key(|player| player.wermart_2v2.rank);
+
+    for player in &all {
+        player.display_summary();
+    }
+    
+    let file = File::create("output.json").unwrap();
+    serde_json::to_writer(file,&all).unwrap();
+
+    // let deserialized:Vec<Player> = serde_json::from_reader(file).unwrap();
+
+
 }
