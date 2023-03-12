@@ -1,10 +1,14 @@
 use serde_json::Value;
+use tokio::time;
 use std::env;
 use std::error::Error;
 use serde::{Serialize,Deserialize};
 use std::fs::File;
 use std::io::prelude::*;
 use bincode;
+use chrono::{DateTime, Utc};
+use std::thread::sleep;
+use std::time::Duration;
 
 #[macro_use]
 extern crate log;
@@ -139,6 +143,51 @@ async fn getpage(rank_offset: u64) -> Result<Vec<Player>, Box<dyn Error>> {
     Ok(player_list)
 }
 
+async fn get_all(start:u64){
+    let nb_player = get_nb_player().await.unwrap();
+    info!("ther is {} player", nb_player);
+
+    debug!("start paralele carving");
+    let mut handles = Vec::new();
+
+    for player_offset in (start..nb_player).step_by(200) {
+        let handle = tokio::spawn(async move {
+            trace!("get page from {}",player_offset);
+            getpage(player_offset).await.unwrap() //erreur propager mal
+        });
+        handles.push(handle);
+    }
+
+    let mut all:Vec<Player> = Vec::new();
+    debug!("wait for all tasks to complete");
+    for handle in handles {
+        all.extend(handle.await.unwrap());
+    }
+
+    debug!("sorting");
+    all.sort_by_key(|player| player.wermart_2v2.rank);
+
+    //crée le noms de fichier
+    let now: DateTime<Utc> = Utc::now();
+    let date_time_str = now.format("%Y-%m-%d_%H:%M").to_string();
+    let file_name = format!("Coh3LadderV1_{}.bin", date_time_str);
+    
+    let file = File::create(file_name).unwrap();
+    bincode::serialize_into(file,&all).unwrap();
+
+
+}
+
+
+fn client(name:String){
+    let bid = File::open(name).unwrap();
+    let decpde:Vec<Player> = bincode::deserialize_from(&bid).unwrap();
+    
+    for player in decpde {
+        player.display_summary();
+    }
+}
+
 #[tokio::main]
 async fn main() {
     env_logger::init();
@@ -158,36 +207,16 @@ async fn main() {
         .unwrap_or(0);
     //doig gen un erreur si pas digit
 
-    let nb_player = get_nb_player().await.unwrap();
-    info!("ther is {} player", nb_player);
-
-    info!("start paralele carving");
-    let mut handles = Vec::new();
-
-    for player_offset in (start..nb_player).step_by(200) {
-        let handle = tokio::spawn(async move {
-            getpage(player_offset).await.unwrap() //erreur propager mal
-        });
-        handles.push(handle);
+    if start == 1{
+        get_all(1).await;
+        for number in 1..10  {
+            info!("remaining: {}",10-number);
+            sleep(Duration::from_secs(number * 60));
+        }
     }
 
-    let mut all:Vec<Player> = Vec::new();
-    info!("wait for all tasks to complete");
-    for handle in handles {
-        all.extend(handle.await.unwrap());
-    }
-
-    all.sort_by_key(|player| player.wermart_2v2.rank);
-
-
-    let file = File::create("output.json").unwrap();
-    let binstr = bincode::serialize_into(file,&all).unwrap();
-
-    let bid = File::open("output.json").unwrap();
-    let decpde:Vec<Player> = bincode::deserialize_from(&bid).unwrap();
-    
-    for player in decpde {
-        player.display_summary();
+    if start == 10 {
+        client(args[2].clone());
     }
 
 }
