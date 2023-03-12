@@ -219,7 +219,25 @@ fn loadfiles() -> Vec<Snap> {
     allgame
 }
 
-fn diff(snaps: Vec<Snap>) {
+fn plot(snaps_by_mj:HashMap<&str, Vec<(u16, DateTime<Utc>)>>,player_name:&str){
+    // Get the player's ranking history
+    let player_history = snaps_by_mj.get(player_name).unwrap();
+
+    // Create a vector of (x, y) points for the graph
+    let points: Vec<(f32, f32)> = player_history
+        .iter()
+        .enumerate()
+        .map(|(i, (rank, date))| (i as f32, *rank as f32))
+        .collect();
+
+    // Plot the graph using textplots
+    Chart::new(200, 80, 0.0, player_history.len() as f32)
+        .lineplot(&Shape::Lines(&points))
+        .display();
+
+}
+
+fn hashmap(snaps: &Vec<Snap>) -> HashMap<&str, Vec<(u16, DateTime<Utc>)>> {
     let snaps_by_mj: HashMap<&str, Vec<(u16, DateTime<Utc>)>> = snaps
         .iter()
         .flat_map(|snap| {
@@ -232,41 +250,12 @@ fn diff(snaps: Vec<Snap>) {
             map
         });
 
-    let mut trouver: Vec<(String, Vec<(u16, DateTime<Utc>)>)> = Vec::new();
-
-    for mj in snaps_by_mj.keys() {
-        let rank_history = snaps_by_mj[mj].clone();
-        trouver.push((mj.to_string(), rank_history));
-    }
-
-    for (name, history) in &trouver {
-        println!("Name: {}", name);
-        for (rank, date) in history {
-            println!("  Rank: {}, Date: {}", rank, date);
-        }
-    }
-
-    let player_name = "\"Thirax\"";
-
-// Get the player's ranking history
-let player_history = snaps_by_mj.get(player_name).unwrap();
-
-// Create a vector of (x, y) points for the graph
-let points: Vec<(f32, f32)> = player_history
-    .iter()
-    .enumerate()
-    .map(|(i, (rank, date))| (i as f32, *rank as f32))
-    .collect();
-
-// Plot the graph using textplots
-Chart::new(200, 80, 0.0, player_history.len() as f32)
-    .lineplot(&Shape::Lines(&points))
-    .display();
-
+    snaps_by_mj.clone()
 }
 
-fn search(snaps: Vec<Snap>, name: String) {
+fn search(snaps: &Vec<Snap>, name: String) -> String {
     let re = Regex::new(name.as_str()).unwrap();
+    let mut retval = "NOTHING".to_string();
     for instant in snaps {
         if let Some(joueur) = instant
             .instantaner
@@ -275,8 +264,10 @@ fn search(snaps: Vec<Snap>, name: String) {
         {
             print!("on {} ", instant.date);
             joueur.display_summary();
+            retval = joueur.name.clone();
         }
     }
+    retval//return une errreur
 }
 
 #[tokio::main]
@@ -309,10 +300,11 @@ async fn main() {
     }
 
     if start == 20 {
-        diff(loadfiles());
+        let filemap = loadfiles();
+        plot(hashmap(&filemap),search(&filemap,args[2].to_string()).as_str());
     }
 
     if start == 10 {
-        search(loadfiles(), args[2].to_string());
+        search(&loadfiles(), args[2].to_string());
     }
 }
