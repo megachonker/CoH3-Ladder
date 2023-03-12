@@ -176,7 +176,7 @@ async fn get_all(start: u64) {
     }
 
     debug!("sorting");
-    all.sort_by_key(|player| player.wermart_2v2.rank);
+    all.sort_by_key(|player| player.wermart_2v2.elo);
 
     //crée le noms de fichier
     let now: DateTime<Utc> = Utc::now();
@@ -219,7 +219,7 @@ fn loadfiles() -> Vec<Snap> {
     allgame
 }
 
-fn plot(snaps_by_mj:HashMap<&str, Vec<(u16, DateTime<Utc>)>>,player_name:&str){
+fn plot(snaps_by_mj:&HashMap<&str, Vec<(u16, DateTime<Utc>)>>,player_name:&str){
     // Get the player's ranking history
     let player_history = snaps_by_mj.get(player_name).unwrap();
 
@@ -227,7 +227,7 @@ fn plot(snaps_by_mj:HashMap<&str, Vec<(u16, DateTime<Utc>)>>,player_name:&str){
     let points: Vec<(f32, f32)> = player_history
         .iter()
         .enumerate()
-        .map(|(i, (rank, date))| (i as f32, *rank as f32))
+        .map(|(i, (elo, date))| (i as f32, *elo as f32))
         .collect();
 
     // Plot the graph using textplots
@@ -243,10 +243,10 @@ fn hashmap(snaps: &Vec<Snap>) -> HashMap<&str, Vec<(u16, DateTime<Utc>)>> {
         .flat_map(|snap| {
             snap.instantaner
                 .iter()
-                .map(move |mj| (mj.name.as_str(), mj.wermart_2v2.rank, snap.date))
+                .map(move |mj| (mj.name.as_str(), mj.wermart_2v2.elo, snap.date))
         })
-        .fold(HashMap::new(), |mut map, (name, rank, date)| {
-            map.entry(name).or_insert_with(Vec::new).push((rank, date));
+        .fold(HashMap::new(), |mut map, (name, elo, date)| {
+            map.entry(name).or_insert_with(Vec::new).push((elo, date));
             map
         });
 
@@ -298,10 +298,20 @@ async fn main() {
             }
         }
     }
+    if start == 30 {
+        let filemap = loadfiles();
+        let meshash:HashMap<&str, Vec<(u16, DateTime<Utc>)>> = hashmap(&filemap);
+        if let Some(joueur) = filemap.last(){
+            for a in &joueur.instantaner{
+                println!("Joeur: {}",a.name);
+                plot(&meshash,&a.name);
+            }
+        }
+    }
 
     if start == 20 {
         let filemap = loadfiles();
-        plot(hashmap(&filemap),search(&filemap,args[2].to_string()).as_str());
+        plot(&hashmap(&filemap),search(&filemap,args[2].to_string()).as_str());
     }
 
     if start == 10 {
