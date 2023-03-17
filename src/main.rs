@@ -232,7 +232,7 @@ fn plot(snaps_by_mj: &HashMap<&str, Vec<(u16, DateTime<Utc>)>>, player_name: &st
 
     // Plot the graph using textplots
     Chart::new(200, 80, 0.0, player_history.len() as f32)
-        .lineplot(&Shape::Points(&points))
+        .lineplot(&Shape::Lines(&points))
         .display();
 }
 
