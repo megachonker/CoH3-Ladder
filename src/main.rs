@@ -219,7 +219,7 @@ fn loadfiles() -> Vec<Snap> {
     allgame
 }
 
-fn plot(snaps_by_mj:&HashMap<&str, Vec<(u16, DateTime<Utc>)>>,player_name:&str){
+fn plot(snaps_by_mj: &HashMap<&str, Vec<(u16, DateTime<Utc>)>>, player_name: &str) {
     // Get the player's ranking history
     let player_history = snaps_by_mj.get(player_name).unwrap();
 
@@ -232,9 +232,8 @@ fn plot(snaps_by_mj:&HashMap<&str, Vec<(u16, DateTime<Utc>)>>,player_name:&str){
 
     // Plot the graph using textplots
     Chart::new(200, 80, 0.0, player_history.len() as f32)
-        .lineplot(&Shape::Lines(&points))
+        .lineplot(&Shape::Points(&points))
         .display();
-
 }
 
 fn hashmap(snaps: &Vec<Snap>) -> HashMap<&str, Vec<(u16, DateTime<Utc>)>> {
@@ -249,8 +248,13 @@ fn hashmap(snaps: &Vec<Snap>) -> HashMap<&str, Vec<(u16, DateTime<Utc>)>> {
             map.entry(name).or_insert_with(Vec::new).push((elo, date));
             map
         });
-
-    snaps_by_mj.clone()
+    let mut sorted_snaps_by_mj = HashMap::new();
+    for (name, snaps) in snaps_by_mj {
+        let mut sorted_snaps = snaps;
+        sorted_snaps.sort_by_key(|snap| snap.1); // sort by date
+        sorted_snaps_by_mj.insert(name, sorted_snaps);
+    }
+    sorted_snaps_by_mj
 }
 
 fn search(snaps: &Vec<Snap>, name: String) -> String {
@@ -267,7 +271,7 @@ fn search(snaps: &Vec<Snap>, name: String) -> String {
             retval = joueur.name.clone();
         }
     }
-    retval//return une errreur
+    retval //return une errreur
 }
 
 #[tokio::main]
@@ -300,18 +304,21 @@ async fn main() {
     }
     if start == 30 {
         let filemap = loadfiles();
-        let meshash:HashMap<&str, Vec<(u16, DateTime<Utc>)>> = hashmap(&filemap);
-        if let Some(joueur) = filemap.last(){
-            for a in &joueur.instantaner{
-                println!("Joeur: {}",a.name);
-                plot(&meshash,&a.name);
+        let meshash: HashMap<&str, Vec<(u16, DateTime<Utc>)>> = hashmap(&filemap);
+        if let Some(joueur) = filemap.last() {
+            for a in &joueur.instantaner {
+                println!("Joeur: {}", a.name);
+                plot(&meshash, &a.name);
             }
         }
     }
 
     if start == 20 {
         let filemap = loadfiles();
-        plot(&hashmap(&filemap),search(&filemap,args[2].to_string()).as_str());
+        plot(
+            &hashmap(&filemap),
+            search(&filemap, args[2].to_string()).as_str(),
+        );
     }
 
     if start == 10 {
